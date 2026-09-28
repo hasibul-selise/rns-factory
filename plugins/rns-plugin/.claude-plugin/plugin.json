@@ -1,0 +1,7 @@
+{
+  "name": "rns-plugin",
+  "version": "0.7.3",
+  "description": "Minimal software-factory layer: short working rules injected at session start, protected-path hook, diff gate, org policy in org/.",
+  "author": { "name": "SELISE" },
+  "license": "MIT"
+}

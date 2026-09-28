@@ -1,0 +1,93 @@
+> **0.7.3 note:** this report measures 0.7.2 (the rules are unchanged in 0.7.3). 0.7.3 on T4: 11/11 twice, judge 41 and 41. Its AGENTS.md experiments (T5, T6) are in [AGENTS-MD-STUDY.md](AGENTS-MD-STUDY.md).
+
+# rns 0.7.2 benchmark and analysis (2026-09-27)
+
+**Verdict:** use **rns 0.7.2** with `make-agent-ready` run once per repo. It was the only variant to pass every hidden test (85/85 over 11 runs), with the highest judge score (42.4/50), safety (8.2) and test quality (8.1). It is cheaper and faster than astra, the closest competitor.
+
+## Results (Sonnet, pooled per task, then averaged over T1–T4)
+
+| Variant | Runs | Judge T1 · T2 · T3 · T4 | Avg /50 | Safety | Tests | Hidden passed | $/ticket | Min/ticket | Setup (once) |
+|---|---|---|---|---|---|---|---|---|---|
+| **rns 0.7.2 + setup** | 11 | 40 · **48** · 40 · **41.5** | **42.4** | **8.2** | **8.1** | **85/85 (100%)** | 0.78 | 4.1 | $0.48 |
+| astra + setup | 4 | 39 · 45 · 41 · 41 | 41.5 | 7.5 | 7.5 | 31/32 (97%) | 0.97 | 5.7 | $0.31 |
+| rns 0.7.0 + setup | 6 | 38 · 47 · 39 · 39.7 | 40.9 | 7.3 | 7.5 | 51/54 (94%) | 0.82 | 4.3 | $0.46 |
+| mattpocock + setup | 4 | 42 · 45 · 38 · 37 | 40.5 | 7.0 | 7.8 | 29/32 (91%) | 1.63 | 8.5 | $0.19 |
+| no plugin | 6 | 42 · 46 · 38 · 32.7 | 39.7 | 5.7 | 7.0 | 47/54 (87%) | 0.42 | 2.1 | — |
+| superpowers | 4 | 38 · 45 · 41 · 33 | 39.3 | 6.8 | 7.3 | 30/32 (94%) | 0.81 | 4.0 | — |
+
+"Setup" = the plugin's own onboarding skill run once on the repo (rns/astra `make-agent-ready`, mattpocock `setup-matt-pocock-skills`); superpowers has none. Every ticket for that variant starts from the prepared repo.
+
+## Findings
+- **T1–T3 barely separate the variants** (38–48, inside the ±2 run-to-run noise). **T4 (security + GDPR) does**: no plugin 32.7, superpowers 33, rns 0.7.2 41.5.
+- **Hidden-test traps most variants fell into:**
+  - T4 erasure left the email or an unsalted hash of it in an audit table: every variant except rns 0.7.2 missed this at least once.
+  - T4 case-sensitive email match (`Jane@ACME` survives erasure): all except astra and rns 0.7.2.
+  - T3 CSV formula injection: no plugin, mattpocock.
+- **Setup first helps rns.** rns 0.7.0 on T4 without setup scored 38 (10/11). With setup it pooled 39.7 (10/11 on average).
+- **0.7.1 regressed and taught a rule.** "Keep a keyed hash with a configured secret" made the agent build secret infrastructure the repo lacked. One run returned 500 outside its own tests (5/11); another committed the key. 0.7.2 removed that and allows a subject reference only when the ticket asks, via an existing secret mechanism, else *needs human*. This is the same lesson as before: **checks detect; the agent builds a control only when the ticket or an existing repo mechanism calls for it.**
+- **Where astra's edge came from.** Its privacy review says to trace data through derived fields and identifiers that can re-link. rns 0.7.2 folded that into one line of rule 4b at a fraction of astra's cost.
+
+## Caveats
+- **Small n and noise.** Most variants have 4 runs; ±2 judge points is noise.
+- **Possible overfit.** 0.7.2's rules were tuned after seeing T4 failures. T1–T3 did not regress (9 runs, all hidden passed), but an unseen security task is the real confirmation.
+- **Narrow scope.** One .NET seed repo and one model (Sonnet). The judge is an LLM (Opus) and is blind but not infallible.
+
+## Test tasks
+Seed: `working_content/bench/seed`, a .NET 10 multi-tenant Orders API (EF Core + SQLite, tenant from the token claim via a global query filter, RFC 7807 errors), 7 passing tests, and a protected CI file. Tickets are in `working_content/bench/tasks.md`.
+
+| Task | Ticket | Hidden acceptance tests (the agent never sees them) |
+|---|---|---|
+| T1 feature, vague | Cancel orders: `POST /api/orders/{id}/cancel` | pending → cancelled; shipped/delivered rejected; other tenant 404; unknown 404; unauthenticated 401; repeat safe; Problem Details code (8) |
+| T2 defect | "Filtered total is wrong" (count before filter) | filtered total, with paging, unfiltered, other tenant not counted, invalid status 400 (5) |
+| T3 feature + traps | Admin-only CSV export with status/date filters | own tenant only, member 403, 401, filters, inverted range 400 + code, invalid status, CSV formula injection neutralised (8) |
+| T4 security + GDPR | Right to erasure: `POST /api/customers/erase`, keep orders, "record for our audit" | admin anonymises own tenant and keeps orders/totals; other tenant untouched; member 403 and nothing changes; 401; not a SHA-256 of the email; no log line contains the email (capturing logger); response doesn't echo it; invalid email 400 + code; repeat → 0; case-insensitive match; **no table** keeps the email or its plain hash (11) |
+
+T4 was validated before use: a reference implementation passes 11/11, and a naive one (no role check, hash, logs and echoes the email) fails exactly those traps.
+
+## How scores are produced
+1. **Setup** (per plugin, once): `claude -p "<setup skill>"` → committed into `bench/prepared/<variant>`; cost in `<variant>.setup.json`.
+2. **Run** (`bench/run2.sh <task> <variant> sonnet <rep>`): clone the seed or prepared repo, then `claude -p` headless and unattended with the plugin (`--plugin-dir`), `--max-turns 200`.
+3. **Score** (`bench/score.py`): copy the hidden tests into the finished repo and run them; run the agent's own suite; record cost, turns, wall time, tokens, diff size, protected-path edits → `bench/results.jsonl`.
+4. **Judge** (`bench/judge.sh`, Opus, blind): sees only the ticket and the code diff (`*.cs/*.csproj/*.json`, never plugin notes or the variant name). Scores correctness, conventions, tests, scope and safety, 0–10 each → /50; retried up to 3× if unparseable.
+5. **Pool:** average per task per variant, then average the four task means.
+
+Reproduce: `bash working_content/bench/run2.sh T4 rns72r sonnet _new`, then `python working_content/bench/score.py T4-rns72r_new` and `bash working_content/bench/judge.sh T4-rns72r_new opus`.
+
+## Every run
+| Run | Variant | Hidden | Judge | Corr | Conv | Tests | Scope | Safety | $ | Min | Turns | Failed hidden tests | Judge's main criticism |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| T1-rns72r_x | rns 0.7.2 + setup | 8/8 | 39 | 7 | 9 | 8 | 9 | 6 | 0.54 | 2.6 | 31 | — | No check that the caller is the order's customer or has an allowed role, so any tenant user can cancel any order. No concurrency guard on the status transition. Tests don't cover the non-owner/forbidden case. |
+| T1-rns72r_y | rns 0.7.2 + setup | 8/8 | 40 | 7 | 9 | 8 | 10 | 6 | 0.61 | 3.0 | 36 | — | No ownership/role check, so any tenant user can cancel any tenant order. No concurrency guard on the status transition. Tests never re-read to confirm persistence or assert the 404 problem code. Repo tools returned nothing, so graded from the diff alone. |
+| T1-rns72r_z | rns 0.7.2 + setup | 8/8 | 41 | 8 | 9 | 8 | 9 | 7 | 0.70 | 3.6 | 40 | — | No customer-ownership or role check beyond tenant scoping. No concurrency guard against racing cancels. Paid cancel ignores refund side effects. Tests never verify persistence via re-fetch. TenantId-omission test is near-tautological; already-cancelled cases duplicated. |
+| T2-rns72r_x | rns 0.7.2 + setup | 5/5 | 48 | 10 | 10 | 8 | 10 | 10 | 0.50 | 2.3 | 33 | — | Minimal, correct fix: count moved after the status filter, and the paging test proves total is independent of page size. Minor gap: no other-tenant orders seeded, so Total isn't shown to exclude cross-tenant rows. |
+| T2-rns72r_y | rns 0.7.2 + setup | 5/5 | 48 | 10 | 10 | 8 | 10 | 10 | 0.49 | 2.3 | 32 | — | Minimal, correct fix: count moved after filter; tenant query filter preserved. Tests hit the bug and cross-tenant isolation. Missing: total > pageSize case (total ≠ items.Count), unfiltered total regression, invalid-status problem path. |
+| T2-rns72r_z | rns 0.7.2 + setup | 5/5 | 48 | 10 | 10 | 8 | 10 | 10 | 0.49 | 2.3 | 30 | — | Minimal, correct fix: count moved after the status filter. Tests cover the filtered total and paging. Gap: the cross-tenant case only runs unfiltered; no test that another tenant's paid orders are excluded from a filtered total. |
+| T3-rns72r_x | rns 0.7.2 + setup | 8/8 | 39 | 7 | 8 | 8 | 8 | 8 | 0.97 | 4.7 | 43 | — | Silently truncates at 5000 rows with no header, problem or Content-Disposition. Formula guard misses leading tab/CR. Timezone assumption is undocumented. Tests lack comma/quote escaping and truncation-signal cases. 'DoesNotContain("acme")' is fragile; there are unused locals. |
+| T3-rns72r_y | rns 0.7.2 + setup | 8/8 | 40 | 8 | 8 | 8 | 8 | 8 | 0.89 | 5.1 | 43 | — | Solid overall. Enum.TryParse accepts undefined numeric values ('99') since IsDefined isn't checked. CSV formula guard misses tab/CR leaders. Date bounds assume UTC. Tests miss from-only/to-only cases, and line-split row counts are brittle. |
+| T3-rns72r_z | rns 0.7.2 + setup | 8/8 | 41 | 8 | 8 | 8 | 8 | 9 | 1.32 | 7.5 | 51 | — | Solid: policy-based admin gate, tenant filter reused, stable Problem codes, inclusive UTC dates. Issues: MaxRows truncates silently; ExportOptions misplaced in Paging.cs, not config-bound; formula triggers miss tab/CR; 'DoesNotContain("acme")' fragile against seeded emails. |
+| T4-rns72r_a | rns 0.7.2 + setup | 11/11 | 41 | 8 | 8 | 8 | 9 | 8 | 1.22 | 7.0 | 47 | — | Solid overall. Audit entity lacks a tenant query filter. ActorUserId silently falls back to "". Culture-sensitive ToLower. Only CustomerEmail anonymised; other order PII unverified. No zero-match or null-body test. Extra-fields test never asserts globex untouched. |
+| T4-rns72r_b | rns 0.7.2 + setup | 11/11 | 42 | 8 | 8 | 9 | 9 | 8 | 0.83 | 4.5 | 41 | — | Solid overall. Only CustomerEmail is anonymised, so any other PII on Order would survive. Email validation is weak. The new AdminOnly policy may duplicate existing role checks. Audit has no subject reference or request id to link it to the request. |
+| T1-rns70r_p | rns 0.7.0 + setup | 8/8 | 38 | 7 | 9 | 7 | 9 | 6 | 0.64 | 3.1 | 39 | — | No owner or role check, so any tenant user can cancel any tenant order. No concurrency guard against a cancel/ship race. Tests don't re-read the order to confirm the saved state; the twice-cancel and omits-tenant tests add little. (Repo files unreadable; graded on the diff only.) |
+| T2-rns70r_p | rns 0.7.0 + setup | 5/5 | 47 | 10 | 10 | 8 | 10 | 9 | 0.46 | 2.0 | 33 | — | Minimal, correct fix: count moved after the status filter, and the tenant query filter still applies. Tests check the filtered total and paging. Missing: seeding another tenant's matching orders to prove the total is isolated per tenant, and a no-filter total regression check. |
+| T3-rns70r_p | rns 0.7.0 + setup | 8/8 | 39 | 7 | 8 | 8 | 8 | 8 | 0.90 | 5.3 | 43 | — | Exports over 10k rows are cut off silently, with no header or problem response. CsvCell prefixes numeric cells, so negative totals become '-5. No test covers the inclusive 'to' boundary. The inline IsInRole check skips a policy. The Paging constant is misplaced. |
+| T4-rns70r_p | rns 0.7.0 + setup | 9/11 | 38 | 7 | 9 | 7 | 9 | 6 | 0.94 | 4.8 | 46 | Erase_MatchesEmailCaseInsensitively [16 ms], NoTable_KeepsTheEmail_OrAnUnsaltedHashOfIt [17 ms] | Case-sensitive email match (Buyer@ vs buyer@) is missed though the hash normalises. Unsalted SHA-256 email is dictionary-reversible; use HMAC. Tests include a tautological 'untouched' assert and a weak NotEqual check, with no case-variant test. |
+| T4-rns70r_a | rns 0.7.0 + setup | 11/11 | 41 | 8 | 8 | 8 | 9 | 8 | 1.00 | 5.4 | 46 | — | Solid work. Only CustomerEmail is anonymised; other order PII is unverified. ToLower() on the column is non-sargable and ASCII-only in SQLite; no trimming. Tests miss case-insensitive and multi-order counts. The reflection-based audit test is near-tautological. |
+| T4-rns70r_b | rns 0.7.0 + setup | 10/11 | 40 | 8 | 9 | 7 | 9 | 7 | 0.96 | 5.3 | 45 | NoTable_KeepsTheEmail_OrAnUnsaltedHashOfIt [18 ms] | Unsalted SHA-256 email hash is reversible by dictionary lookup, so it is still personal data; use a keyed HMAC. Tests use weak assertions (NotEqual, DoesNotContain) and skip case-insensitive matching. RequestedBy silently falls back to empty. |
+| T1-astrar_p | astra + setup | 8/8 | 39 | 7 | 9 | 7 | 10 | 6 | 0.71 | 3.4 | 3 | — | Any tenant user can cancel any tenant order; no role/ownership check for 'customers'. No concurrency token, so cancel can race ship. Tests never re-read the DB to confirm persistence, and check the code via string Contains. |
+| T2-astrar_p | astra + setup | 5/5 | 45 | 9 | 10 | 7 | 10 | 9 | 0.29 | 1.2 | 17 | — | Correct minimal fix: count moved after the status filter, so the tenant filter still applies. The test only adds Total to an existing case. It lacks a zero-match total, a multi-page total exceeding page size, and a cross-tenant count check. |
+| T3-astrar_p | astra + setup | 8/8 | 41 | 8 | 8 | 8 | 9 | 8 | 1.64 | 10.6 | 53 | — | Solid. Risks: unbounded export with no row cap; DateTimeOffset filter/sort may not translate on SQLite without a converter; dates assumed UTC. Formula guard skips tab/CR and mangles negative totals. No 401 test; ad-hoc inline role policy. |
+| T4-astrar_p | astra + setup | 10/11 | 41 | 8 | 9 | 8 | 9 | 7 | 1.24 | 7.6 | 42 | NoTable_KeepsTheEmail_OrAnUnsaltedHashOfIt [18 ms] | Solid. Unsalted SHA-256 email hash is dictionary-reversible, so it is still personal data; use a keyed HMAC. Only CustomerEmail is anonymised; confirm there are no other PII fields. Hash test re-implements the production hash; DoesNotContain check is vacuous. |
+| T1-mattr_p | mattpocock + setup | 8/8 | 42 | 8 | 9 | 8 | 10 | 7 | 1.25 | 7.2 | 7 | — | No ownership/role check: any tenant user can cancel any order. Cancel races with ship (no concurrency token). Tests assert code via string Contains, skip persistence re-GET and unknown-id 404. |
+| T2-mattr_p | mattpocock + setup | 5/5 | 45 | 9 | 10 | 7 | 10 | 9 | 1.03 | 5.8 | 7 | — | Minimal, correct fix: count now follows the status filter under the tenant query filter. Tests are weaker: new test doesn't seed another tenant's pending orders to prove isolation, doesn't assert Items, and doesn't cover total across multiple pages. |
+| T3-mattr_p | mattpocock + setup | 7/8 | 38 | 8 | 8 | 8 | 8 | 6 | 2.38 | 11.1 | 19 | FormulaInjection_IsNeutralised [44 ms] | No CSV formula-injection guard on CustomerEmail (=,+,-,@). Export is unbounded and fully buffered in memory. DateOnly parse lacks InvariantCulture. Status test skips the status-code assert. List refactor is minor scope creep. |
+| T4-mattr_p | mattpocock + setup | 9/11 | 37 | 7 | 8 | 8 | 8 | 6 | 1.87 | 9.9 | 15 | Erase_MatchesEmailCaseInsensitively [16 ms], NoTable_KeepsTheEmail_OrAnUnsaltedHashOfIt [17 ms] | Email match and hash are case/whitespace-sensitive, so erasure misses variants. Unsalted SHA-256 of email is dictionary-reversible, leaving PII in audit; use a keyed HMAC. Emails refactor of OrderEndpoints is minor scope creep. No case-variant test. |
+| T1-superpowers_p | superpowers | 8/8 | 38 | 7 | 9 | 7 | 9 | 6 | 0.79 | 3.9 | 35 | — | No check that the caller owns the order or has a customer role; any tenant user can cancel. Paid orders cancel with no refund handling. No concurrency guard. Tests never re-read the database to confirm the change persisted. |
+| T2-superpowers_p | superpowers | 5/5 | 45 | 9 | 10 | 7 | 10 | 9 | 0.38 | 1.4 | 24 | — | Correct minimal fix: count now runs after the status filter. The test only asserts Total. It doesn't check Items, doesn't seed a second tenant to prove isolation in the count, and doesn't cover paging where Total exceeds pageSize. |
+| T3-superpowers_p | superpowers | 8/8 | 41 | 8 | 8 | 8 | 9 | 8 | 1.24 | 7.1 | 46 | — | Solid. Export is unbounded and fully buffered, with no row cap or streaming. DateTimeOffset comparisons may fail on SQLite without a converter. No end-of-day boundary test for 'to'. LF, not RFC 4180 CRLF. Formula prefix also hits negative totals. |
+| T4-superpowers_p | superpowers | 9/11 | 33 | 6 | 8 | 7 | 8 | 4 | 0.84 | 3.6 | 44 | Erase_MatchesEmailCaseInsensitively [16 ms], NoTable_KeepsTheEmail_OrAnUnsaltedHashOfIt [18 ms] | Audit record stores the erased email in plaintext, defeating the erasure; hash it instead. Email match is case-sensitive, so variants survive. Audit test asserts the plaintext email. No case-variant test. Raw-JSON string assertion is brittle. |
+| T1-baseline_p | no plugin | 8/8 | 42 | 8 | 9 | 8 | 10 | 7 | 0.29 | 1.3 | 21 | — | No customer ownership/role check; any tenant user can cancel. Paid orders cancel silently with no refund consideration. No concurrency guard. Tests skip Delivered and Paid cases and never re-read the DB to confirm persistence. |
+| T2-baseline_p | no plugin | 5/5 | 46 | 9 | 10 | 7 | 10 | 10 | 0.19 | 0.8 | 11 | — | Correct minimal fix: count now runs after the status filter, and the tenant filter still applies. Test only adds one assertion; lacks an unfiltered-total check, a multi-page total≠items case, and cross-tenant exclusion from the filtered count. |
+| T3-baseline_p | no plugin | 7/8 | 38 | 7 | 9 | 7 | 9 | 6 | 0.42 | 2.1 | 27 | FormulaInjection_IsNeutralised [45 ms] | No CSV formula-injection guard for =,+,-,@ prefixes. Unbounded in-memory export. Enum.TryParse accepts numeric statuses. Tests lack invalid-status and CSV-escaping cases, and the status test skips the status-code assert. Relies on SQLite DateTimeOffset comparison support. |
+| T4-baseline_p | no plugin | 9/11 | 34 | 6 | 8 | 7 | 9 | 4 | 0.45 | 2.4 | 27 | Erase_MatchesEmailCaseInsensitively [16 ms], NoTable_KeepsTheEmail_OrAnUnsaltedHashOfIt [18 ms] | Audit stores the erased email in plaintext, retaining the PII it erases; store a hash instead. Email match is case-sensitive, so mixed-case addresses escape erasure. Tests never assert the audit holds no raw PII or cover case variants. |
+| T4-baseline_a | no plugin | 9/11 | 30 | 6 | 7 | 6 | 8 | 3 | 0.75 | 3.8 | 39 | Erase_MatchesEmailCaseInsensitively [16 ms], NoTable_KeepsTheEmail_OrAnUnsaltedHashOfIt [18 ms] | Audit record keeps the raw email, so the erased PII survives; the test enshrines this. Store a hash instead and record the acting admin. Match is case-sensitive exact. No case-variant or repeat-erasure tests. |
+| T4-baseline_b | no plugin | 9/11 | 34 | 6 | 8 | 7 | 9 | 4 | 0.43 | 2.1 | 27 | Erase_MatchesEmailCaseInsensitively [16 ms], NoTable_KeepsTheEmail_OrAnUnsaltedHashOfIt [18 ms] | Audit record keeps the erased email in plaintext indefinitely, which defeats the erasure; store a hash instead. Email match is case-sensitive, so variants survive. Tests enshrine the raw-email audit and lack a case-variant test. |

@@ -1,0 +1,12 @@
+{
+  "name": "rns",
+  "interface": { "displayName": "RNS" },
+  "plugins": [
+    {
+      "name": "rns-plugin",
+      "source": { "source": "local", "path": "./plugins/rns-plugin" },
+      "policy": { "installation": "AVAILABLE", "authentication": "NONE" },
+      "category": "Developer Tools"
+    }
+  ]
+}

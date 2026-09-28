@@ -1,0 +1,17 @@
+{
+  "name": "rns-plugin",
+  "version": "0.7.3",
+  "description": "Minimal software-factory layer: team working rules skill, diff gate, org policy in org/.",
+  "author": { "name": "SELISE" },
+  "license": "MIT",
+  "skills": "./skills/",
+  "hooks": {},
+  "interface": {
+    "displayName": "RNS Software Factory (lite)",
+    "shortDescription": "Short working rules for tests, security and scope, plus a diff gate",
+    "developerName": "SELISE",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Implement ticket ABC-123."]
+  }
+}

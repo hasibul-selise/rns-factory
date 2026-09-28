@@ -1,0 +1,22 @@
+# Paths agents never write. Shell case patterns, case-insensitive, relative to the repo root; * also matches "/".
+# A repo can add more in .rns/protected-paths.txt.
+# Lockfiles: hand edits are blocked by the hook; the gate only warns when a lockfile changes alongside its manifest (a real dependency change).
+.github/*
+.gitlab-ci.yml
+azure-pipelines*.yml
+*Dockerfile
+*docker-compose*.yml
+*.lock
+*package-lock.json
+*packages.lock.json
+infra/*
+*.tf
+*helm/*
+*k8s/*
+*appsettings.Production.json
+*.env
+*.env.local
+*.env.prod
+*.env.production
+*.pfx
+*.pem
