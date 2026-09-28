@@ -34,7 +34,7 @@ From PowerShell **and** a POSIX shell (Git Bash, macOS or Linux):
 ```bash
 claude plugin validate plugins/rns-plugin
 CLAUDE_PLUGIN_ROOT=plugins/rns-plugin node plugins/rns-plugin/hooks/session-start.mjs   # JSON with hookSpecificOutput.additionalContext
-CURSOR_PLUGIN_ROOT=plugins/rns-plugin node plugins/rns-plugin/hooks/session-start.mjs   # JSON with additional_context
+CURSOR_VERSION=1 node plugins/rns-plugin/hooks/session-start.mjs   # JSON with additional_context (CURSOR_PLUGIN_ROOT alone also works)
 echo '{"cwd":"<repo>","tool_input":{"file_path":"<repo>/.github/x.yml"}}' | node plugins/rns-plugin/hooks/guard.mjs; echo $?   # 2
 node plugins/rns-plugin/scripts/gate.mjs <base-sha>   # run inside a git repo: PASS/WARN/FAIL lines, then GATE PASS|FAIL
 ```
@@ -51,6 +51,6 @@ Run at least T3 and T4 (the tasks with traps), two repeats each; ±2 judge point
 
 ## Host compatibility checklist
 - **Claude Code:** `hooks/hooks.json` uses `${CLAUDE_PLUGIN_ROOT}` and matcher `startup|clear|compact`; the guard runs on `Write|Edit|MultiEdit|NotebookEdit`.
-- **Cursor:** `.cursor-plugin/plugin.json` points at `./skills/` and `./hooks/hooks-cursor.json`, which uses `"version": 1`, a lowercase `sessionStart` and a relative command. session-start detects `CURSOR_PLUGIN_ROOT` first and emits `additional_context` only.
+- **Cursor:** `.cursor-plugin/plugin.json` points at `./skills/` and `./hooks/hooks-cursor.json`, which uses `"version": 1`, a lowercase `sessionStart` and a relative command. session-start treats `CURSOR_VERSION`, `CURSOR_PROJECT_DIR`, or `CURSOR_PLUGIN_ROOT` as Cursor and emits `additional_context` only. Claude Code sets none of those, so it still gets `hookSpecificOutput`.
 - **Codex:** `.codex-plugin/plugin.json` declares `"skills": "./skills/"` and **`"hooks": {}`**, so Codex doesn't auto-run the Claude-shaped `hooks.json`. Codex has no session-start hook; it gets the rules from the skills (each reads `rules.md`) and from the repo's `AGENTS.md`, which it reads natively.
 - Emit exactly one context field per host: Claude Code reads both `additional_context` and `hookSpecificOutput` and would inject twice.

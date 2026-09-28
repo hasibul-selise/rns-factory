@@ -12,7 +12,8 @@ try {
 
 const env = process.env;
 let out;
-if (env.CURSOR_PLUGIN_ROOT) {
+// Cursor's hook process always has CURSOR_VERSION and CURSOR_PROJECT_DIR. CURSOR_PLUGIN_ROOT is not one of them, so keying only on it emits the wrong field and the rules are dropped. Do not use CLAUDE_PROJECT_DIR: Claude Code sets that too.
+if (env.CURSOR_PLUGIN_ROOT || env.CURSOR_VERSION || env.CURSOR_PROJECT_DIR) {
   out = { additional_context: text };
 } else if (env.CLAUDE_PLUGIN_ROOT && !env.COPILOT_CLI) {
   out = { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: text } };

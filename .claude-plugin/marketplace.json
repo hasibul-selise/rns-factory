@@ -1,8 +1,8 @@
 {
   "name": "rns",
   "owner": { "name": "SELISE" },
-  "metadata": { "description": "RNS software factory: minimal working rules, protected-path hook, diff gate, org policy.", "version": "0.7.3" },
+  "metadata": { "description": "RNS software factory: minimal working rules, protected-path hook, diff gate, org policy.", "version": "0.7.4" },
   "plugins": [
-    { "name": "rns-plugin", "source": "./plugins/rns-plugin", "description": "Minimal working rules injected at session start, protected-path hook, diff gate, org policy.", "version": "0.7.3" }
+    { "name": "rns-plugin", "source": "./plugins/rns-plugin", "description": "Minimal working rules injected at session start, protected-path hook, diff gate, org policy.", "version": "0.7.4" }
   ]
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.4 (2026-09-28): Cursor session hook detects the host without CURSOR_PLUGIN_ROOT
+
+- **session-start** emits `additional_context` when `CURSOR_VERSION` or `CURSOR_PROJECT_DIR` is set, not only when `CURSOR_PLUGIN_ROOT` is set. Cursor's documented hook environment does not include `CURSOR_PLUGIN_ROOT`, so 0.7.3 wrote `additionalContext` and the rules never entered the session. Claude Code is unchanged: it does not set those variables and still receives `hookSpecificOutput` only.
+
 ## 0.7.3 (2026-09-28): AGENTS.md lifecycle, cross-host hardening
 Benchmark: T4 11/11 twice (judge 41, 41). AGENTS.md showed no measurable quality effect on the small seed (T5, T6); see AGENTS-MD-STUDY.md.
 
