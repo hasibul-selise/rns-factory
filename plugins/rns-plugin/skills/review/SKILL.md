@@ -7,7 +7,7 @@ description: Use when reviewing a branch, diff or PR against its brief and the r
 
 Judge the diff, not the author's explanation. Don't edit code. Follow the rns working rules (read `../../rules.md` if they aren't in context). Read `AGENTS.md` first: its guardrails and existing mechanisms are what "fit" is judged against.
 
-1. **Scope:** base = the one given, else the work file's `Base:`, else `git merge-base HEAD <base_branch>`. Read `git diff <base>` (plus untracked files), each changed file, and its direct callers. Trust Evidence stamped with the current HEAD; otherwise run build + tests + `node ../../scripts/gate.mjs <base>` once.
+1. **Scope:** base = the one given, else the work file's `Base:`, else the merge-base with the work file's `Target:` or the branch the user named, else run `node ../../scripts/gate.mjs` with no base and use the `Base:` it prints (the repo's default branch). Read `git diff <base>` (plus untracked files), each changed file, and its direct callers. Trust Evidence stamped with the current HEAD; otherwise run build + tests + `node ../../scripts/gate.mjs <base>` once.
 2. **Check:**
    - **Tests:** each AC has a test; every rule-3 case the change touches is tested; assertions check values, not just "not null" or status only; no test was deleted or loosened.
    - **Security (rule 4a) and personal data (rule 4b):** give every item the diff touches a verdict; also no swallowed errors. Each gate WARN is fixed or has a credible reason in Evidence.

@@ -2,6 +2,6 @@
   "name": "rns",
   "owner": { "name": "SELISE" },
   "plugins": [
-    { "name": "rns-plugin", "source": "./plugins/rns-plugin", "description": "Minimal working rules at session start, diff gate, org policy.", "version": "0.7.4" }
+    { "name": "rns-plugin", "source": "./plugins/rns-plugin", "description": "Minimal working rules at session start, diff gate, org policy.", "version": "0.7.5" }
   ]
 }
