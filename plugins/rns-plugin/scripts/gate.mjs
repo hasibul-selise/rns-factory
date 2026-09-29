@@ -1,10 +1,10 @@
 // rns gate: deterministic checks on the diff since <base> (committed + uncommitted + untracked).
-// Any host with Node >= 18 and git.   Usage: node gate.mjs [base]   Exit 1 on FAIL.
+// Any host with Node >= 18 and git.   Usage: node gate.mjs [base-sha | base-branch]   Exit 1 on FAIL.
 // FAIL: protected paths, secrets. WARN (resolve each in Evidence): tests, personal data in logs,
 // real-looking data in fixtures, new anonymous endpoints.
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { protectedPatterns, readConfig, tryGit } from './lib.mjs';
+import { defaultBranch, isBranch, protectedPatterns, readConfig, tryGit } from './lib.mjs';
 
 const out = (s) => process.stdout.write(s + '\n');
 const top = tryGit(['rev-parse', '--show-toplevel'], process.cwd());
@@ -13,12 +13,23 @@ const root = top.trim();
 const g = (args) => tryGit(args, root);
 const cfg = readConfig(root);
 
+// Base: the arg (a branch → its merge-base; a sha as is), else config base_branch, else the repo's default branch.
 let base = process.argv[2] || '';
-if (!base) {
-  base = (g(['merge-base', 'HEAD', cfg.baseBranch || 'main']) || '').trim();
-  if (!base) { out('FAIL base not found (pass a base sha)'); process.exit(1); }
+let from = 'arg';
+let branch = '';
+if (base && isBranch(base, root)) branch = base;
+else if (!base) {
+  const def = cfg.baseBranch ? { branch: cfg.baseBranch, source: 'config' } : defaultBranch(root);
+  if (!def) { out('FAIL base not found (pass a base branch or sha, or run: git remote set-head origin --auto)'); process.exit(1); }
+  branch = def.branch; from = def.source;
+}
+if (branch) {
+  base = (g(['merge-base', 'HEAD', branch]) || '').trim();
+  if (!base) { out(`FAIL no merge-base with '${branch}' (pass a base sha)`); process.exit(1); }
+  from = `${from}: ${branch}`;
 }
 if (!g(['rev-parse', '--verify', '-q', `${base}^{commit}`])) { out(`FAIL base '${base}' not found`); process.exit(1); }
+out(`Base: ${base.slice(0, 12)} (from ${from})`);
 
 const lines = (s) => (s || '').split(/\r?\n/).filter(Boolean);
 const untracked = lines(g(['ls-files', '--others', '--exclude-standard']));

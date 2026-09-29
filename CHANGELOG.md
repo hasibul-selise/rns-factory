@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.5 (2026-09-29): base branch from the prompt or git, not config
+
+- **gate** with no base uses `.rns/config.yml` `base_branch` only if a human set it, else the repo's default branch from local refs (`origin/HEAD`, then `origin/main`, `origin/master`, `main`, `master`). The hardcoded `main` fallback is gone, so repos on `master` or with only `origin/main` work. A branch name as the arg now means its merge-base, not its tip. The gate prints `Base: <sha> (from …)`.
+- **start-point** (`scripts/start-point.mjs`, new) decides where a ticket's work starts from local refs: `clear` when the user named a branch, config pins one, or the repo has a single default; `ask` only when it isn't clear (no default found, `develop`/`release/*` next to the default, an existing feature branch with its own commits, a hotfix with release lines). **refine** and **build** ask that one question only on `ask`; unattended runs take the default and list it as needs human. The choice is recorded once as `Target:` and build branches from it.
+- **make-agent-ready** no longer writes `base_branch`. **review** falls back to the gate's detected base; **build** records `Target:` when the user names a branch and **pr** targets it, else the repo default.
+
 ## 0.7.4 (2026-09-28): Cursor session hook detects the host without CURSOR_PLUGIN_ROOT
 
 - **session-start** emits `additional_context` when `CURSOR_VERSION` or `CURSOR_PROJECT_DIR` is set, not only when `CURSOR_PLUGIN_ROOT` is set. Cursor's documented hook environment does not include `CURSOR_PLUGIN_ROOT`, so 0.7.3 wrote `additionalContext` and the rules never entered the session. Claude Code is unchanged: it does not set those variables and still receives `hookSpecificOutput` only.

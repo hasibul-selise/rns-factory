@@ -1,7 +1,7 @@
 {
   "name": "rns-plugin",
   "displayName": "RNS Software Factory (lite)",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "description": "Minimal software-factory layer: short working rules at session start, diff gate, org policy in org/.",
   "author": { "name": "SELISE" },
   "license": "MIT",

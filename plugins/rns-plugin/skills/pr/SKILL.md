@@ -9,7 +9,7 @@ Claim only what the work file records. Never merge, tag, deploy or enable auto-m
 
 1. **Gate:** `node ../../scripts/gate.mjs <base>`. On a protected-path FAIL, revert the file and write the needed change to the org human-handoff file (`../../org/policy.md`). Secrets → stop. No Node → the gate is NOT RUN and the PR stays draft.
 2. **Version:** bump from the contract line (breaking → major, additive → minor, internal → patch) where the repo keeps a version; add a changelog entry if there is a changelog.
-3. **Clean and push:** no scratch files or logs; commit the work file with the change; push the branch.
+3. **Clean and push:** no scratch files or logs; commit the work file with the change; push the branch. Target the work file's `Target:`, else the branch the user named, else the repo's default branch (omit `--base`).
 4. **Draft or ready:** ready only if the gate ran and passed, every gate WARN is resolved in Evidence, no Critical/High is open, no needs-human item is open, and every AC has a passing test. Otherwise draft, with the reason on the first line.
 5. **Body** (every heading present; write "none" when empty):
 ```markdown
