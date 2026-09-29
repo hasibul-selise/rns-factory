@@ -1,7 +1,8 @@
-// rns start point: which branch a ticket's work starts from, and whether that is clear or the user must be asked.
-// Local refs only (no network).   Usage: node start-point.mjs [named-branch] [--hotfix]
-// Prints one line: Start: <branch> · clear|ask · <reason> · candidates: a, b
-import { defaultBranch, isBranch, readConfig, tryGit } from './lib.mjs';
+// rns start point: where a ticket's work starts and where its PR goes, and whether that is clear or the user must be asked.
+// Branches come only from the user (the arg) or git; no branch names are assumed.   Usage: node start-point.mjs [named-branch]
+// Prints one line: Start: <branch> · clear|ask · <reason> [· options: …]
+// On any branch other than the default it always asks: here → <fork> | stack on <current> | fresh from <fork>.
+import { defaultBranch, isBranch, tryGit } from './lib.mjs';
 
 const out = (s) => process.stdout.write(s + '\n');
 const top = tryGit(['rev-parse', '--show-toplevel'], process.cwd());
@@ -9,58 +10,49 @@ if (!top) { out('FAIL not a git repository'); process.exit(1); }
 const root = top.trim();
 const g = (args) => (tryGit(args, root) || '').trim();
 const lines = (s) => s.split(/\r?\n/).filter(Boolean);
+const named = process.argv.slice(2).find((a) => !a.startsWith('--')) || '';
 
-const args = process.argv.slice(2);
-const hotfix = args.includes('--hotfix');
-const named = args.find((a) => !a.startsWith('--')) || '';
-
-const report = (branch, verdict, reason, candidates = []) => {
-  out(`Start: ${branch || 'unknown'} · ${verdict} · ${reason}` + (candidates.length ? ` · candidates: ${candidates.join(', ')}` : ''));
+const report = (branch, verdict, reason, options = []) => {
+  out(`Start: ${branch || 'unknown'} · ${verdict} · ${reason}` + (options.length ? ` · options: ${options.join(' | ')}` : ''));
   process.exit(0);
 };
 
-// Branch names without the origin/ prefix; a local branch wins over its remote-tracking copy.
 const refs = lines(g(['for-each-ref', '--sort=-committerdate', '--format=%(refname:short)', 'refs/heads', 'refs/remotes/origin']))
   .filter((r) => r !== 'origin/HEAD' && r !== 'origin');
-const byName = new Map();
-for (const r of refs) {
-  const n = r.replace(/^origin\//, '');
-  if (!byName.has(n) || !r.startsWith('origin/')) byName.set(n, r);
-}
 const ahead = (from, to) => Number(g(['rev-list', '--count', `${from}..${to}`])) || 0;
+const sha = (ref) => g(['rev-parse', '--verify', '-q', `${ref}^{commit}`]);
 const current = g(['symbolic-ref', '--quiet', '--short', 'HEAD']);
+const sameBranch = (a, b) => a && b && a.replace(/^origin\//, '') === b.replace(/^origin\//, '');
 
-// Clear: the user named it, or a human pinned it in config.
-if (named) {
-  if (isBranch(named, root)) report(named, 'clear', 'named');
-  report(named, 'ask', 'named branch not found', [...byName.keys()].slice(0, 8));
-}
-const cfg = readConfig(root);
-if (cfg.baseBranch) report(cfg.baseBranch, 'clear', 'config base_branch');
+if (named && !isBranch(named, root)) report(named, 'ask', 'named branch not found', refs.slice(0, 8));
 
-// A. No default branch detectable.
 const def = defaultBranch(root);
-if (!def) {
-  const upstream = g(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']);
-  report(upstream || current, 'ask', 'no default branch (no origin/HEAD, main or master)', [...byName.keys()].slice(0, 8));
-}
-const defName = def.branch.replace(/^origin\//, '');
+const defNote = def?.hint ? ` (${def.hint})` : '';
 
-// D. Hotfix with release lines present: which line?
-const releases = [...byName.keys()].filter((n) => /^(release|hotfix)\//.test(n));
-if (hotfix && releases.length) report(byName.get(releases[0]), 'ask', 'hotfix: which release line', [...releases, defName]);
+// Fork point: the other branch HEAD has the fewest own commits over (ties → most recent); falls back to the default.
+const others = refs.filter((r) => !sameBranch(r, current) && sha(r));
+const fork = others.reduce((best, r) => {
+  const n = ahead(r, 'HEAD');
+  return best && best.n <= n ? best : { r, n };
+}, null);
+const from = def && fork && ahead(def.branch, 'HEAD') === fork.n ? def.branch : fork?.r;
 
-// Other long-lived branches besides the default.
-const others = [...byName.keys()].filter((n) => n !== defName && /^(develop|dev|staging|release\/.+)$/.test(n));
-const integration = others.find((n) => /^(develop|dev)$/.test(n) && ahead(def.branch, byName.get(n)) > 0);
-const suggested = integration ? byName.get(integration) : def.branch;
+// A named branch other than the one checked out: start from it, PR into it.
+if (named && !sameBranch(named, current)) report(named, 'clear', 'named');
 
-// C. On a non-default branch that has its own commits: stack on it, or start fresh?
-if (current && current !== defName && !others.includes(current) && ahead(suggested, 'HEAD') > 0) {
-  report(suggested, 'ask', `on ${current} with its own commits: stack on it or start fresh`, [...new Set([suggested, def.branch, current])]);
-}
+if (!def) report(from || current, 'ask', 'no default branch from git (no origin/HEAD, remote not reachable)', others.slice(0, 8));
 
-// B. Several long-lived candidates and none named.
-if (others.length) report(suggested, 'ask', 'several long-lived branches', [defName, ...others]);
+// On the default (or detached at its tip): fresh branch from it.
+const onDefault = sameBranch(current, def.branch) || (!current && sha('HEAD') === sha(def.branch));
+if (onDefault) report(def.branch, 'clear', `on default (${def.source})${defNote}`);
 
-report(def.branch, 'clear', current === defName ? 'on default' : `default (${def.source})`);
+// Anywhere else: always ask.
+const own = ahead(from || def.branch, 'HEAD');
+const where = current || 'detached HEAD';
+const target = from || def.branch;
+const forkNote = sameBranch(target, def.branch) ? '' : `, fork point ${target}, default ${def.branch}`;
+report(target, 'ask', `on ${where} (${own} own commit${own === 1 ? '' : 's'}${forkNote})${defNote}`, [
+  `here → ${target}${own ? ` (PR includes ${own} earlier commit${own === 1 ? '' : 's'})` : ''}`,
+  ...(current ? [`stack on ${current}`] : []),
+  `fresh from ${target}`,
+]);
