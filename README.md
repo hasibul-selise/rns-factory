@@ -1,4 +1,4 @@
-# rns-plugin 0.7.5: a lean software factory for coding agents
+# rns-plugin 0.7.6: a lean software factory for coding agents
 
 rns makes an AI coding agent deliver a ticket the way a careful senior engineer would. It writes a failing test first, checks auth, tenancy and personal data in its own diff, reuses what the repo already has, and flags what needs a human. The output is a reviewable change with evidence.
 
@@ -145,7 +145,7 @@ A repo can add its own protected paths in `.rns/protected-paths.txt`. A repo's A
 | Headless or CI runs fail with an auth error | re-login the CLI (`claude` → `/login`) |
 
 ## More
-- [CHANGELOG.md](CHANGELOG.md): what changed and why, 0.7.0 → 0.7.5
+- [CHANGELOG.md](CHANGELOG.md): what changed and why, 0.7.0 → 0.7.6
 - [BENCHMARK.md](BENCHMARK.md): method, tasks, every run
 - [AGENTS-MD-STUDY.md](AGENTS-MD-STUDY.md): does AGENTS.md help the next feature?
 - [CONTRIBUTING.md](CONTRIBUTING.md): principles, layout, tests and how to measure a change
