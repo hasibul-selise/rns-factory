@@ -44,14 +44,23 @@ export function protectedPatterns(repoRoot) {
   return text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#')).map(globToRegex);
 }
 
-// The repo's default branch from local refs only (no network): origin/HEAD, else the first common name that exists.
+// The repo's default branch, from git only: the local origin/HEAD, else ask the remote (one call, 30 s).
+// Returns { branch, source, hint? } or null. No branch names are assumed.
 export function defaultBranch(repoRoot) {
   const head = (tryGit(['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], repoRoot) || '').trim();
   if (head) return { branch: head, source: 'origin/HEAD' };
-  for (const b of ['origin/main', 'origin/master', 'main', 'master']) {
-    if (tryGit(['rev-parse', '--verify', '-q', `${b}^{commit}`], repoRoot)) return { branch: b, source: 'fallback' };
+  if (!tryGit(['remote', 'get-url', 'origin'], repoRoot)) return null;
+  let remote = '';
+  try {
+    remote = execFileSync('git', ['ls-remote', '--symref', 'origin', 'HEAD'], { cwd: repoRoot, encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch { return null; }
+  const name = (remote.match(/^ref: refs\/heads\/(\S+)\s+HEAD/m) || [])[1];
+  if (!name) return null;
+  const hint = 'run: git remote set-head origin --auto';
+  for (const b of [`origin/${name}`, name]) {
+    if (tryGit(['rev-parse', '--verify', '-q', `${b}^{commit}`], repoRoot)) return { branch: b, source: 'remote', hint };
   }
-  return null;
+  return { branch: `origin/${name}`, source: 'remote', hint: `run: git fetch origin ${name} && git remote set-head origin --auto` };
 }
 
 // True when name is a local or remote-tracking branch (not a sha or tag).
@@ -62,7 +71,6 @@ export function isBranch(name, repoRoot) {
 // Minimal reader for the few .rns/config.yml keys the gate needs.
 export function readConfig(repoRoot) {
   const text = readText(join(repoRoot, '.rns', 'config.yml'));
-  const baseBranch = (text.match(/^base_branch:\s*["']?([^"'\s#]+)/m) || [])[1];
   let piiFields = [];
   const inline = text.match(/^pii_fields:\s*\[([^\]]*)\]/m);
   if (inline) piiFields = inline[1].split(',');
@@ -72,5 +80,5 @@ export function readConfig(repoRoot) {
   }
   piiFields = piiFields.map((f) => f.trim().replace(/^["']|["']$/g, '').split('.').pop()).filter(Boolean);
   const agentsBudget = Number((text.match(/^agents_md_budget:\s*(\d+)/m) || [])[1]) || 0;
-  return { baseBranch, piiFields, agentsBudget };
+  return { piiFields, agentsBudget };
 }

@@ -13,19 +13,20 @@ const root = top.trim();
 const g = (args) => tryGit(args, root);
 const cfg = readConfig(root);
 
-// Base: the arg (a branch → its merge-base; a sha as is), else config base_branch, else the repo's default branch.
+// Base: the arg (a branch → its merge-base; a sha as is), else the repo's default branch from git.
 let base = process.argv[2] || '';
 let from = 'arg';
 let branch = '';
+let hint = '';
 if (base && isBranch(base, root)) branch = base;
 else if (!base) {
-  const def = cfg.baseBranch ? { branch: cfg.baseBranch, source: 'config' } : defaultBranch(root);
-  if (!def) { out('FAIL base not found (pass a base branch or sha, or run: git remote set-head origin --auto)'); process.exit(1); }
-  branch = def.branch; from = def.source;
+  const def = defaultBranch(root);
+  if (!def) { out('FAIL base not found — pass the Target branch or a sha'); process.exit(1); }
+  branch = def.branch; from = def.source; hint = def.hint || '';
 }
 if (branch) {
   base = (g(['merge-base', 'HEAD', branch]) || '').trim();
-  if (!base) { out(`FAIL no merge-base with '${branch}' (pass a base sha)`); process.exit(1); }
+  if (!base) { out(`FAIL no merge-base with '${branch}' — pass the Target branch or a sha${hint ? ` (${hint})` : ''}`); process.exit(1); }
   from = `${from}: ${branch}`;
 }
 if (!g(['rev-parse', '--verify', '-q', `${base}^{commit}`])) { out(`FAIL base '${base}' not found`); process.exit(1); }

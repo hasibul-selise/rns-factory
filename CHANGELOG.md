@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.6 (2026-09-29): base branch from the user, git or a question; never stored
+
+- **No branch names in code or config.** The default branch comes only from git: the local `origin/HEAD`, else `git ls-remote --symref origin HEAD` (one call, 30 s timeout; prints a `git remote set-head origin --auto` hint). `.rns/config.yml` `base_branch` is no longer read, and **make-agent-ready** no longer writes it; existing keys are ignored.
+- **gate**: a branch name as the arg now means its merge-base, not its tip. With no arg it uses the git default; if git can't tell, it fails with "pass the Target branch or a sha". It prints `Base: <sha> (from …)`.
+- **start-point** (`scripts/start-point.mjs`, rewritten) decides where the work starts and where the PR goes. `clear` when the user names another branch or HEAD is on the default. `ask` when git has no default, the named branch doesn't exist, or HEAD is on any other branch. On another branch it always offers: commit here → PR into the fork point · stack a branch on it → PR into it · fresh branch from the fork point. The fork point is found from commit counts, not names.
+- **refine/build** ask that one question only on `ask`; unattended runs take "fresh" and list it as needs human. The work file records `Work:` (branch committed on), `Target:` (PR base) and `Base:` (diff start). **pr** opens `Work` → `Target`; **review** diffs from `Base:`.
+
 ## 0.7.5 (2026-09-29): base branch from the prompt or git, not config
 
 - **gate** with no base uses `.rns/config.yml` `base_branch` only if a human set it, else the repo's default branch from local refs (`origin/HEAD`, then `origin/main`, `origin/master`, `main`, `master`). The hardcoded `main` fallback is gone, so repos on `master` or with only `origin/main` work. A branch name as the arg now means its merge-base, not its tip. The gate prints `Base: <sha> (from …)`.
