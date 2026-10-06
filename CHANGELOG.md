@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.7 (2026-10-06): lightweight refinement handoff
+
+- **refine** adds testable acceptance criteria and a high-level implementation outline to an agent-managed ticket block, or returns the sections in chat. Preserves original ticket content and records readiness, blockers and the outline in the local brief.
+- **build** uses refinement details when available without requiring their format, reuses loaded context and treats the proposed approach as advisory. Unresolved requirement decisions block dependent coding, including unattended runs; planning can continue with gaps marked.
+
 ## 0.7.6 (2026-09-29): base branch from the user, git or a question; never stored
 
 - **No branch names in code or config.** The default branch comes only from git: the local `origin/HEAD`, else `git ls-remote --symref origin HEAD` (one call, 30 s timeout; prints a `git remote set-head origin --auto` hint). `.rns/config.yml` `base_branch` is no longer read, and **make-agent-ready** no longer writes it; existing keys are ignored.
