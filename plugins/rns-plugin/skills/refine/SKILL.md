@@ -1,11 +1,11 @@
 ---
 name: refine
-description: Use when a ticket or request is vague, or when asked to refine, clarify or scope work before building. Asks questions with defaults and writes a short brief with testable acceptance criteria.
+description: Use when a ticket or request is vague, or when asked to refine, clarify or scope work before building. Asks questions with defaults and writes a short brief plus ticket or chat acceptance criteria and a high-level implementation outline.
 ---
 
 # Refine a request
 
-Output: the `## Brief` section of `.rns/work/<ID>.md` (`<ID>` = ticket id, else `local-<slug>`). The brief is ≤ 25 lines. You test the requirement; you don't design the solution. If the rns working rules aren't already in context, read `../../rules.md`.
+Output: the `## Brief` section of `.rns/work/<ID>.md` (`<ID>` = ticket id, else `local-<slug>`), plus the ticket or chat handoff below. The brief is ≤ 25 lines. Test the requirement and propose only a high-level implementation direction; detailed design, file lists, test mapping and coding steps belong to build. If the rns working rules aren't already in context, read `../../rules.md`.
 
 1. **Load (one batch):** `AGENTS.md` and `.rns/config.yml` if present (don't ask what they already answer), the ticket (every comment, if it's a tracker link), and the few files it touches. If the work file exists, fold in new answers and re-ask only what's open.
 2. **Ask** only what changes the build: roles and denials, tenant scope, personal data and retention, contracts and consumers, out of scope, state transitions, and for a bug the reproduction plus the source of "expected"; the start branch only when `node ../../scripts/start-point.mjs [branch the user named]` prints `ask` (its options are the choices, the last one the default). At most 5 numbered questions per round and 3 rounds. Each question carries a default: "If unanswered: X". Local run: ask and wait. Unattended: record the defaults and continue.
@@ -19,4 +19,25 @@ Type: feature|defect · Work: <branch> · Target: <branch> · Risky: yes/no (why
 **Assumptions** — one line each; mark auth, roles, tenancy, personal data, money, consumed contracts as **needs human**
 ```
    Each AC names a value, a code or a visible outcome ("handles errors gracefully" is not an AC).
-4. **Verdict:** NOT READY if an AC can't fail, an endpoint has no auth/status codes, or a defect has no reproduction. Otherwise READY or READY WITH ASSUMPTIONS (any needs human). Reply with the verdict, open questions and needs-human items only.
+4. **Verdict:** NOT READY if blocking clarification remains, an AC can't fail, an endpoint has no auth/status codes, or a defect has no reproduction. Otherwise READY or READY WITH ASSUMPTIONS (any needs human). Unanswered defaults and needs-human decisions affecting acceptance criteria are not resolved clarification.
+5. **Handoff:** keep the acceptance criteria and scope consistent with the local brief. Save the verdict, remaining blocking questions and compact outline in that brief within its existing line budget; reuse loaded context. Reuse existing ticket criteria without duplicating or contradicting them. Finalize criteria only after blocking questions are resolved. Use this compact format:
+```markdown
+<!-- refine-agent:start -->
+> 🤖 Refinement agent · Updated YYYY-MM-DD
+
+## Acceptance criteria
+- [ ] Observable, testable outcome.
+
+## Implementation outline
+*Proposed direction; details may change during implementation.*
+- **Product:** …
+- **Repos in scope:** …
+- **Approach:** …
+- **Out of scope:** …
+<!-- refine-agent:end -->
+```
+   - Use the current date and confirmed product/repository context; mark unknowns explicitly. Keep the approach to a short proposal supported by the inspected context, without detailed steps.
+   - While blocking questions remain, label the criteria provisional, retain confirmed context, set Approach to `Pending clarification`, and add `## Open questions` inside the block. Remove that section when resolved. If only technical investigation remains, use `Pending implementation planning` for Approach.
+   - Ticket: when updating the ticket is within the user's requested scope, append this block to its description or replace the existing marked block. Preserve everything outside the markers. Read the latest description before editing and verify the saved result. If updates are unavailable or outside scope, return the prepared block in chat and state that the ticket was not updated.
+   - No ticket: return the same sections directly in chat; omit the HTML markers and agent attribution. Do not create a ticket.
+   - Include the verdict and any remaining needs-human items in the reply; for a successful ticket update, link the ticket instead of repeating its full handoff.

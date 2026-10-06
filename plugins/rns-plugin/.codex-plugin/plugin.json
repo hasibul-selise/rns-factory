@@ -1,6 +1,6 @@
 {
   "name": "rns-plugin",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "description": "Minimal software-factory layer: team working rules skill, diff gate, org policy in org/.",
   "author": { "name": "SELISE" },
   "license": "MIT",
